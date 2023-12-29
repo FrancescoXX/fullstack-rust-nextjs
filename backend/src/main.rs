@@ -187,4 +187,53 @@ fn handle_put_request(request: &str) -> (String, String) {
         (Ok(id), Ok(user), Ok(mut client)) => {
             client
                 .execute(
-                    "UPDATE users
+                    "UPDATE users SET name = $1, email = $2 WHERE id = $3",
+                    &[&user.name, &user.email, &id],
+                )
+                .unwrap();
+
+            (OK_RESPONSE.to_string(), "User updated".to_string())
+        }
+        _ => (INTERNAL_ERROR.to_string(), "Internal error".to_string()),
+    }
+}
+
+// Handle delete request
+fn handle_delete_request(request: &str) -> (String, String) {
+    match (get_id(&request).parse::<i32>(), Client::connect(DB_URL, NoTls)) {
+        (Ok(id), Ok(mut client)) => {
+            let rows_affected = client.execute("DELETE FROM users WHERE id = $1", &[&id]).unwrap();
+
+            // If rows affected is 0, user not found
+            if rows_affected == 0 {
+                return (NOT_FOUND.to_string(), "User not found".to_string());
+            }
+
+            (OK_RESPONSE.to_string(), "User deleted".to_string())
+        }
+        _ => (INTERNAL_ERROR.to_string(), "Internal error".to_string()),
+    }
+}
+
+fn main() {
+    // Set Database
+    if let Err(_) = set_database() {
+        println!("Error setting database");
+        return;
+    }
+
+    // Start server and print port
+    let listener = TcpListener::bind(format!("0.0.0.0:8080")).unwrap();
+    println!("Server listening on port 8080");
+
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                handle_client(stream);
+            }
+            Err(e) => {
+                println!("Unable to connect: {}", e);
+            }
+        }
+    }
+}
